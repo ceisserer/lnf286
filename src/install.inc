@@ -4,8 +4,6 @@
 
 install:
         cld
-        mov dx,msg_banner
-        call print
         ; DOS version >= 3.10
         mov ax,3000h
         int 21h
@@ -14,7 +12,9 @@ install:
         ja .verok
         cmp ah,10
         jae .verok
-.oldv:  mov dx,msg_dosver
+.oldv:  mov dx,msg_banner
+        call print
+        mov dx,msg_dosver
         jmp fatal
 .verok: mov [dosmajor],al
 
@@ -51,11 +51,14 @@ install:
         jmp short .arg
 .optq:  mov byte [opt_q],1
         jmp short .arg
-.usage: mov dx,msg_usage
+.usage: mov dx,msg_banner
+        call print
+        mov dx,msg_usage
         call print
         mov ax,4C00h
         int 21h
-.argd:
+.argd:  mov dx,msg_banner
+        call print_q
         ; already installed?
         mov ax,71FFh
         mov bx,MAGIC
