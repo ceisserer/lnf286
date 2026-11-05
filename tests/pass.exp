@@ -1,0 +1,83 @@
+LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+Code page 437
+Installed, 18912 bytes resident.
+$ vol D:\ 
+0000 12 80 FAT
+OK
+$ md "D:\LONGDIR" 
+OK
+$ cd "D:\LONGDIR" 
+OK
+$ pwd 
+\LONGDIR
+OK
+$ mk "D:\LONGDIR\FILE.TXT" "on fat32" 
+action 2
+OK
+$ mknew "D:\LONGDIR\FILE.TXT" x 
+ERR 80
+$ mk "D:\LONGDIR\SECOND.TXT" "second" 
+action 2
+OK
+$ cat FILE.TXT 
+on fat32
+OK
+$ dir "*.*" 
+. |  | 10 0
+.. |  | 10 0
+FILE.TXT |  | 20 8
+SECOND.TXT |  | 20 6
+OK
+$ dir "*.txt" 
+FILE.TXT |  | 20 8
+SECOND.TXT |  | 20 6
+OK
+$ ren FILE.TXT RENAMED.TXT 
+OK
+$ short RENAMED.TXT 
+D:\LONGDIR\RENAMED.TXT
+OK
+$ long RENAMED.TXT 
+D:\LONGDIR\RENAMED.TXT
+OK
+$ attr RENAMED.TXT 
+0020
+OK
+$ del RENAMED.TXT 
+OK
+$ delw "*.TXT" 
+OK
+$ dir "*.*" 
+. |  | 10 0
+.. |  | 10 0
+OK
+$ cd \ 
+OK
+$ rd LONGDIR 
+OK
+$ md "Long Name On FAT32" 
+OK
+$ md "C:\Grow" 
+OK
+$ cat "C:\Grow\A very long file name to make the directory grow quickly number 50" 
+50
+OK
+$ ren "C:\Grow\A very long file name to make the directory grow quickly number 50" "D:\X.TXT" 
+ERR 17
+$ dir "C:\Grow\*number 4*" 
+A very long file name to make the directory grow quickly number 4 | AVERYL~4 | 20 1
+A very long file name to make the directory grow quickly number 40 | AVERY~40 | 20 2
+A very long file name to make the directory grow quickly number 41 | AVERY~41 | 20 2
+A very long file name to make the directory grow quickly number 42 | AVERY~42 | 20 2
+A very long file name to make the directory grow quickly number 43 | AVERY~43 | 20 2
+A very long file name to make the directory grow quickly number 44 | AVERY~44 | 20 2
+A very long file name to make the directory grow quickly number 45 | AVERY~45 | 20 2
+A very long file name to make the directory grow quickly number 46 | AVERY~46 | 20 2
+A very long file name to make the directory grow quickly number 47 | AVERY~47 | 20 2
+A very long file name to make the directory grow quickly number 48 | AVERY~48 | 20 2
+A very long file name to make the directory grow quickly number 49 | AVERY~49 | 20 2
+OK
+$ delw "C:\Grow\*" 
+OK
+$ rd "C:\Grow" 
+OK
