@@ -10,6 +10,16 @@ mtools sees must match `*.files`.
     make check            # or: tests/check.sh
     tests/check.sh -u     # accept the current output as expected
 
+MS-DOS: the tests can also run on MS-DOS 6.x. MS-DOS is not included;
+build a boot floppy from your own copy of setup disk 1 and point
+`MSDOS_IMG` at it:
+
+    tests/mkmsdos.sh /path/to/144OEM1.IMG /tmp/msdos.img
+    MSDOS_IMG=/tmp/msdos.img tests/check.sh
+
+This adds `msdos-basic` (the basic tests on MS-DOS) and `msdos` (SUBST,
+SHARE, RAMDRIVE, CHKDSK).
+
 Requirements: `nasm`, `qemu-system-i386`, `mtools`, `dosfstools`
 (`mkfs.fat`, `fsck.fat`), `python3`.
 
