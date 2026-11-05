@@ -1,0 +1,137 @@
+LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+Code page 437
+Installed, 18912 bytes resident.
+$ md "C:\Long Directory Name" 
+OK
+$ mk "C:\Long Directory Name\File In Subst.txt" subst 
+action 2
+OK
+$ vol E:\ 
+4006 255 260 FAT
+OK
+$ dir "E:\*" 
+. |  | 10 0
+.. |  | 10 0
+File In Subst.txt | FILEIN~1.TXT | 20 5
+OK
+$ cat "E:\File In Subst.txt" 
+subst
+OK
+$ md "E:\Dir On Subst" 
+OK
+$ cd "E:\Dir On Subst" 
+OK
+$ pwd E 
+\Dir On Subst
+OK
+$ mk "Relative On Subst.txt" rel 
+action 2
+OK
+$ cd .. 
+OK
+$ pwd E 
+\
+OK
+$ cd .. 
+OK
+$ pwd E 
+\
+OK
+$ short "E:\Dir On Subst\Relative On Subst.txt" 
+C:\LONGDI~1\DIRONS~1\RELATI~1.TXT
+OK
+$ long "E:\DIRONS~1\RELATI~1.TXT" 
+C:\Long Directory Name\Dir On Subst\Relative On Subst.txt
+OK
+$ sub "E:\DIRONS~1\RELATI~1.TXT" 
+E:\Dir On Subst\Relative On Subst.txt
+OK
+$ full "E:\Dir On Subst\New.txt" 
+C:\LONGDI~1\DIRONS~1\New.txt
+OK
+$ ren "E:\File In Subst.txt" "E:\Renamed In Subst.txt" 
+OK
+$ dir "C:\Long Directory Name\*" 
+. |  | 10 0
+.. |  | 10 0
+Renamed In Subst.txt | RENAME~1.TXT | 20 5
+Dir On Subst | DIRONS~1 | 10 0
+OK
+$ dir "C:\Long Directory Name\Dir On Subst\*" 
+. |  | 10 0
+.. |  | 10 0
+Relative On Subst.txt | RELATI~1.TXT | 20 3
+OK
+$ vol D:\ 
+4006 255 260 FAT
+OK
+$ md "D:\Ram Disk Directory" 
+OK
+$ ren "D:\Ram Disk Directory\Ram File 5.txt" "D:\Ram Disk Directory\Fifth.txt" 
+OK
+$ dir "D:\Ram Disk Directory\*" 
+. |  | 10 0
+.. |  | 10 0
+Ram File 1.txt | RAMFIL~1.TXT | 20 1
+Ram File 2.txt | RAMFIL~2.TXT | 20 1
+Ram File 3.txt | RAMFIL~3.TXT | 20 1
+Ram File 4.txt | RAMFIL~4.TXT | 20 1
+Fifth.txt | FIFTH.TXT | 20 1
+Ram File 6.txt | RAMFIL~6.TXT | 20 1
+Ram File 7.txt | RAMFIL~7.TXT | 20 1
+Ram File 8.txt | RAMFIL~8.TXT | 20 1
+Ram File 9.txt | RAMFIL~9.TXT | 20 1
+Ram File 10.txt | RAMFI~10.TXT | 20 2
+OK
+$ delw "D:\Ram Disk Directory\Ram*" 
+OK
+$ dir "D:\Ram Disk Directory\*" 
+. |  | 10 0
+.. |  | 10 0
+Fifth.txt | FIFTH.TXT | 20 1
+OK
+$ del "D:\Ram Disk Directory\Fifth.txt" 
+OK
+$ rd "D:\Ram Disk Directory" 
+OK
+$ dir "D:\*" 
+ERR 2
+
+Datenträgernummer: 1234-ABCD
+
+   41,670,656 Byte Speicherplatz auf dem Datenträger insgesamt
+        4,096 Byte in 2 Verzeichnissen
+        4,096 Byte in 2 Benutzerdateien
+   41,662,464 Byte auf dem Datenträger verfügbar
+
+        2,048 Byte in jeder Zuordnungseinheit
+       20,347 Zuordnungseinheiten auf dem Datenträger insgesamt
+       20,343 Zuordnungseinheiten auf dem Datenträger verfügbar
+
+      655,360 Byte konventioneller Arbeitsspeicher
+      296,672 Byte frei
+
+Statt dem Befehl CHKDSK, können Sie auch SCANDISK eingeben. SCANDISK
+entdeckt und löst zuverlässig einen größeren Bereich von Festplattenproblemen.
+Um mehr Informationen zu erhalten, geben Sie den Befehl HELP SCANDISK
+an der Eingabeaufforderung ein.
+
+
+
+      258,560 Byte Speicherplatz auf dem Datenträger insgesamt
+      258,560 Byte auf dem Datenträger verfügbar
+
+          512 Byte in jeder Zuordnungseinheit
+          505 Zuordnungseinheiten auf dem Datenträger insgesamt
+          505 Zuordnungseinheiten auf dem Datenträger verfügbar
+
+      655,360 Byte konventioneller Arbeitsspeicher
+      296,672 Byte frei
+
+Statt dem Befehl CHKDSK, können Sie auch SCANDISK eingeben. SCANDISK
+entdeckt und löst zuverlässig einen größeren Bereich von Festplattenproblemen.
+Um mehr Informationen zu erhalten, geben Sie den Befehl HELP SCANDISK
+an der Eingabeaufforderung ein.
+
+LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+Removed from memory.

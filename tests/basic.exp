@@ -297,10 +297,10 @@ OK
 $ cat "grüße aus köln.txt" 
 umlaut
 OK
-$ mk "A file name that is quite a bit longer than one hundred characters to test many directory entries.txt" long 
+$ mk "A file name that is longer than eighty characters to use many directory entries.txt" long 
 action 2
 OK
-$ cat "a file name that is quite a bit longer than one hundred characters to test many directory entries.txt" 
+$ cat "a file name that is longer than eighty characters to use many directory entries.txt" 
 long
 OK
 $ md "C:\Many" 

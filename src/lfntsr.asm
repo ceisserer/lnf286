@@ -9,7 +9,15 @@
 ; Requires: DOS 3.1+, 8086/8088 CPU.  Assemble with NASM:
 ;       nasm -f bin -o lfntsr.com lfntsr.asm
 ;
-; Copyright (c) 2026 - released under the MIT license, see LICENSE
+; Copyright (C) 2026 the lnf286 authors
+;
+; This program is free software: you can redistribute it and/or modify it
+; under the terms of the GNU General Public License as published by the Free
+; Software Foundation, either version 3 of the License, or (at your option)
+; any later version.  This program is distributed in the hope that it will
+; be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General
+; Public License (file LICENSE) for more details.
 ; ===========================================================================
 
         cpu 8086

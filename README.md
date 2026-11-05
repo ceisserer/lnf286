@@ -75,8 +75,8 @@ Ctrl-C, so DOS can't abort a program halfway through an update.
   reading directories directly with INT 25h (both the classic and the
   >32 MB packet form). Long names are assembled from the VFAT entries
   and checked against the SFN checksum. The starting point comes from
-  DOS itself (TRUENAME of `X:\` and the current directory), which should
-  make SUBST'd drives work (not tested yet).
+  DOS itself (TRUENAME of `X:\` and the current directory), so SUBST'd
+  drives work.
 * **Doing the work.** Wherever possible the real operation is done by
   DOS on the short name (mkdir, rmdir, delete, rename, open, set
   attributes). LFNTSR then adds or removes the long name entries in
@@ -124,19 +124,23 @@ supported (BX=0).
 * Moving a directory to another directory fails, because DOS can't do it.
 * LFNTSR is not reentrant: a 71xxh call made while another one is in
   progress (e.g. from an interrupt handler) returns 7100h.
-* Tested with FreeDOS (kernel 2040) under QEMU. The MS-DOS buffer
-  handling was checked against the published MS-DOS 4.0 source but has
-  not been tested on real MS-DOS.
+* Tested under QEMU with FreeDOS (kernel 2040) and MS-DOS 6.20 (German),
+  including SUBST drives, SHARE and RAMDRIVE. Not yet tested on real
+  hardware, on an actual 8088, or on DR-DOS / PC DOS.
 
 ## Tests
 
 `tests/` contains an automated test suite. It boots FreeDOS in QEMU with
 a FAT12 floppy, a FAT16 hard disk and a FAT32 hard disk, and runs a few
-hundred API calls through the `LT.COM` test tool. The output is compared
+hundred API calls through the `LT.COM` test tool. If you provide an
+MS-DOS 6.x boot floppy (built from your own setup disk 1 with
+`tests/mkmsdos.sh`), the same tests also run on MS-DOS, plus tests
+for SUBST, SHARE, RAMDRIVE and CHKDSK. The output is compared
 with the expected output, and the disk images are checked with
 `fsck.fat` and mtools from Linux. See [tests/README.md](tests/README.md).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The FreeDOS boot floppy used by the tests
+GNU General Public License, version 3 or later, see [LICENSE](LICENSE).
+The FreeDOS boot floppy used by the tests
 (`tests/fdboot.img`) is GPL software; see `tests/README.md`.

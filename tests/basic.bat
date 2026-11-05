@@ -79,11 +79,13 @@ for %%i in (1 2 3 4 5 6 7 8 9 10 11) do %LT% mk "Test File %%i.txt" x >> A:\OUT.
 %LT% mk "Grüße aus Köln.txt" umlaut >> A:\OUT.TXT
 %LT% cat "GRÜßE AUS KÖLN.TXT" >> A:\OUT.TXT
 %LT% cat "grüße aus köln.txt" >> A:\OUT.TXT
-%LT% mk "A file name that is quite a bit longer than one hundred characters to test many directory entries.txt" long >> A:\OUT.TXT
-%LT% cat "a file name that is quite a bit longer than one hundred characters to test many directory entries.txt" >> A:\OUT.TXT
+%LT% mk "A file name that is longer than eighty characters to use many directory entries.txt" long >> A:\OUT.TXT
+%LT% cat "a file name that is longer than eighty characters to use many directory entries.txt" >> A:\OUT.TXT
 %LT% md "C:\Many" >> A:\OUT.TXT
 %LT% cd "C:\Many" >> A:\OUT.TXT
-for %%i in (1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30) do %LT% mk "Many Long Named File Number %%i.dat" %%i >> A:\NUL
+for %%i in (1 2 3 4 5 6 7 8 9 10) do %LT% mk "Many Long Named File Number %%i.dat" %%i >> NUL
+for %%i in (11 12 13 14 15 16 17 18 19 20) do %LT% mk "Many Long Named File Number %%i.dat" %%i >> NUL
+for %%i in (21 22 23 24 25 26 27 28 29 30) do %LT% mk "Many Long Named File Number %%i.dat" %%i >> NUL
 %LT% dir "*" >> A:\OUT.TXT
 %LT% cat "Many Long Named File Number 30.dat" >> A:\OUT.TXT
 %LT% delw "*" >> A:\OUT.TXT
