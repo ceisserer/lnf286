@@ -1,6 +1,6 @@
-LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+LFNTSR 1.10 - long file name API for DOS (FAT12/FAT16)
 Code page 437
-Installed, 18912 bytes resident.
+Installed, 23200 bytes resident.
 $ md "C:\Long Directory Name" 
 OK
 $ mk "C:\Long Directory Name\File In Subst.txt" subst 
@@ -109,7 +109,7 @@ Datenträgernummer: 1234-ABCD
        20,343 Zuordnungseinheiten auf dem Datenträger verfügbar
 
       655,360 Byte konventioneller Arbeitsspeicher
-      296,672 Byte frei
+      292,384 Byte frei
 
 Statt dem Befehl CHKDSK, können Sie auch SCANDISK eingeben. SCANDISK
 entdeckt und löst zuverlässig einen größeren Bereich von Festplattenproblemen.
@@ -126,12 +126,12 @@ an der Eingabeaufforderung ein.
           505 Zuordnungseinheiten auf dem Datenträger verfügbar
 
       655,360 Byte konventioneller Arbeitsspeicher
-      296,672 Byte frei
+      292,384 Byte frei
 
 Statt dem Befehl CHKDSK, können Sie auch SCANDISK eingeben. SCANDISK
 entdeckt und löst zuverlässig einen größeren Bereich von Festplattenproblemen.
 Um mehr Informationen zu erhalten, geben Sie den Befehl HELP SCANDISK
 an der Eingabeaufforderung ein.
 
-LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+LFNTSR 1.10 - long file name API for DOS (FAT12/FAT16)
 Removed from memory.

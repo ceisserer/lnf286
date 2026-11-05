@@ -816,16 +816,19 @@ put_str_seg:
 ; ---------------------------------------------------------------------------
 ; Find handles
 ; ---------------------------------------------------------------------------
-; h_alloc - BX = free (or least recently used) handle structure
+; h_alloc - BX = free (or least recently used) handle structure.
+;   Every allocation bumps the structure's generation, which is part of the
+;   handle number: a search whose handle was taken over gets "invalid
+;   handle" instead of the entries of another search.
 h_alloc:
         push ax
         push cx
         push dx
         push si
-        mov si,handles
+        mov si,[handles]
         mov bx,si
         mov dx,0FFFFh
-        mov cx,NHANDLES
+        mov cx,[nhandles]
 .l:     cmp byte [si+H_USED],0
         je .take
         mov ax,[si+H_LRU]
@@ -838,7 +841,10 @@ h_alloc:
         jmp short .got
 .take:  mov bx,si
 .got:   mov byte [bx+H_USED],1
-        call h_touch
+        inc byte [bx+H_GEN]
+        jnz .g
+        inc byte [bx+H_GEN]             ; generation 0 is never used
+.g:     call h_touch
         pop si
         pop dx
         pop cx
@@ -856,35 +862,42 @@ h_touch:
 ; h_get - [u_bx] = handle number -> BX = structure, CF if invalid
 h_get:
         push ax
+        push cx
         push dx
         mov ax,[u_bx]
+        mov cl,ah                       ; generation
+        xor ah,ah
         sub ax,HBASE
         jb .bad
-        cmp ax,NHANDLES
+        cmp ax,[nhandles]
         jae .bad
         mov dx,HSIZE
         mul dx
-        add ax,handles
+        add ax,[handles]
         mov bx,ax
         cmp byte [bx+H_USED],0
         je .bad
+        cmp cl,[bx+H_GEN]
+        jne .bad
         clc
         jmp short .x
 .bad:   stc
 .x:     pop dx
+        pop cx
         pop ax
         ret
 
-; h_number - BX = structure -> AX = handle number
+; h_number - BX = structure -> AX = handle number (generation << 8 | index)
 h_number:
         push dx
         push cx
         mov ax,bx
-        sub ax,handles
+        sub ax,[handles]
         xor dx,dx
         mov cx,HSIZE
         div cx
         add ax,HBASE
+        mov ah,[bx+H_GEN]
         pop cx
         pop dx
         ret
@@ -1489,61 +1502,11 @@ f_open:
         jmp .result
 .lfn:   ; create the entries ourselves, then let DOS open the empty file
         mov si,lastname
-        call lfn_count
-        inc cx
-        mov [op_n],cx
-        mov ax,[rp_parent]
-        call dir_set
-        call find_run
-        jc .ret
-        mov [op_run],ax
-        dec cx
-        push ax
-        mov si,alias11
-        call sfn_checksum
-        mov dl,al
-        pop ax
-        mov si,lastname
-        call write_lfn
-        jc .ioe
-        add ax,cx
-        call dir_ptr
-        jc .ioe
-        call dir_dirty
-        ; build the short entry
-        mov di,bx
-        mov si,alias11
-        mov cx,11
-        rep movsb
         mov al,[u_cx]
         and al,06h                      ; hidden, system
         or al,20h                       ; archive
-        stosb                           ; 0Bh
-        xor al,al
-        stosb                           ; 0Ch
-        push bx
-        call now_dos                    ; DX date, CX time, BL 10ms
-        mov al,bl
-        pop bx
-        stosb                           ; 0Dh creation 10ms
-        mov ax,cx
-        stosw                           ; 0Eh creation time
-        mov ax,dx
-        stosw                           ; 10h creation date
-        stosw                           ; 12h access date
-        xor ax,ax
-        stosw                           ; 14h
-        mov ax,cx
-        stosw                           ; 16h write time
-        mov ax,dx
-        stosw                           ; 18h write date
-        xor ax,ax
-        stosw                           ; 1Ah cluster
-        stosw                           ; 1Ch size
-        stosw
-        mov ax,[op_run]
-        mov cx,[op_n]
-        call fix_end
+        call new_lfn_file
+        jc .nlf
         call dos_sync
         ; open it
         mov bx,[u_bx]
@@ -1589,6 +1552,9 @@ f_open:
         call dos_sync
         clc
 .ret:   ret
+.nlf:   cmp ax,21
+        je .ioe
+        ret
 .ioe:   call dos_sync
         mov ax,21
         stc
@@ -1606,6 +1572,84 @@ f_open:
 .badname:
         mov ax,3
         stc
+        ret
+
+; ---------------------------------------------------------------------------
+; new_lfn_file - write the entries of a new, empty file: long name SI,
+;   short name alias11, attributes AL, in directory [rp_parent].
+;   out: [op_run] = first entry, [op_n] = number of entries (short entry
+;        last); CF -> AX = 5 (directory full) or 21 (I/O error)
+; ---------------------------------------------------------------------------
+new_lfn_file:
+        push bx
+        push cx
+        push dx
+        push si
+        push di
+        mov [nf_attr],al
+        call lfn_count
+        inc cx
+        mov [op_n],cx
+        mov ax,[rp_parent]
+        call dir_set
+        call find_run
+        jc .x
+        mov [op_run],ax
+        dec cx
+        push ax
+        push si
+        mov si,alias11
+        call sfn_checksum
+        mov dl,al
+        pop si
+        pop ax
+        call write_lfn
+        jc .ioe
+        add ax,cx
+        call dir_ptr
+        jc .ioe
+        call dir_dirty
+        ; build the short entry
+        mov di,bx
+        mov si,alias11
+        mov cx,11
+        rep movsb
+        mov al,[nf_attr]
+        stosb                           ; 0Bh
+        xor al,al
+        stosb                           ; 0Ch
+        push bx
+        call now_dos                    ; DX date, CX time, BL 10ms
+        mov al,bl
+        pop bx
+        stosb                           ; 0Dh creation 10ms
+        mov ax,cx
+        stosw                           ; 0Eh creation time
+        mov ax,dx
+        stosw                           ; 10h creation date
+        stosw                           ; 12h access date
+        xor ax,ax
+        stosw                           ; 14h
+        mov ax,cx
+        stosw                           ; 16h write time
+        mov ax,dx
+        stosw                           ; 18h write date
+        xor ax,ax
+        stosw                           ; 1Ah cluster
+        stosw                           ; 1Ch size
+        stosw
+        mov ax,[op_run]
+        mov cx,[op_n]
+        call fix_end
+        clc
+        jmp short .x
+.ioe:   mov ax,21
+        stc
+.x:     pop di
+        pop si
+        pop dx
+        pop cx
+        pop bx
         ret
 
 ; now_dos - current date/time in DOS format: DX date, CX time, BL 10ms

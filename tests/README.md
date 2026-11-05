@@ -1,11 +1,19 @@
 # Tests
 
 `check.sh` boots FreeDOS in QEMU, loads LFNTSR and runs the batch files
-`basic.bat` (FAT16 hard disk C: and FAT12 floppy A:) and `pass.bat`
-(FAT32 disk D:, which LFNTSR hands through to DOS). Each run is compared
+`basic.bat` (FAT16 hard disk C: and FAT12 floppy A:), `pass.bat`
+(FAT32 disk D:, which LFNTSR hands through to DOS) and `tunnel.bat`
+(plain DOS create/delete/rename: tunnelling, removal of long name
+entries, find handles, `/H` and `/T`). Each run is compared
 with the expected output (`*.exp`). The test also checks the disk images
-from Linux: `fsck.fat` must find no errors, and the long file names that
-mtools sees must match `*.files`.
+from Linux: `fsck.fat` must find no errors, `lfncheck.py` must find no
+orphaned long name entries (`fsck.fat -n` does not report those), and
+the long file names that mtools sees must match `*.files`.
+
+Note that the FreeDOS kernel removes the long name entries of files it
+deletes or renames itself; MS-DOS does not. `mkorphan.sh` therefore puts
+orphaned long name entries on the disk before `tunnel.bat` runs, so that
+LFNTSR's removal is tested on FreeDOS too.
 
     make check            # or: tests/check.sh
     tests/check.sh -u     # accept the current output as expected
@@ -18,7 +26,7 @@ build a boot floppy from your own copy of setup disk 1 and point
     MSDOS_IMG=/tmp/msdos.img tests/check.sh
 
 This adds `msdos-basic` (the basic tests on MS-DOS) and `msdos` (SUBST,
-SHARE, RAMDRIVE, CHKDSK).
+SHARE, RAMDRIVE, CHKDSK). `tunnel.bat` runs on FreeDOS only so far.
 
 Requirements: `nasm`, `qemu-system-i386`, `mtools`, `dosfstools`
 (`mkfs.fat`, `fsck.fat`), `python3`.

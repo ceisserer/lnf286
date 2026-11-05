@@ -22,6 +22,8 @@ rm -f "$work/hd.img"
 set -- $(python3 "$here/mkhd.py" "$work/hd.img" ${HDCYLS:-81} 6)
 SOURCE_DATE_EPOCH=946684800 mkfs.fat -F 16 -h $1 -g 16/63 -S 512 --offset $1 -i 1234ABCD -n TESTDISK "$work/hd.img" $(($2 / 2)) >/dev/null
 echo "@@$(($1 * 512))" > "$work/hdoff"
+# optional preparation of the hard disk: $HDSETUP IMAGE@@OFFSET
+if [ -n "$HDSETUP" ]; then $HDSETUP "$work/hd.img@@$(($1 * 512))"; fi
 # optional second disk D: with FAT32 (not handled by LFNTSR -> pass-through)
 HD2=
 if [ -n "$FAT32" ]; then

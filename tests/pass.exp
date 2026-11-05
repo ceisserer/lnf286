@@ -1,6 +1,6 @@
-LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)
+LFNTSR 1.10 - long file name API for DOS (FAT12/FAT16)
 Code page 437
-Installed, 18912 bytes resident.
+Installed, 23200 bytes resident.
 $ vol D:\ 
 0000 12 80 FAT
 OK

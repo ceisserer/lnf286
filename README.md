@@ -14,7 +14,10 @@ them as usual, and the reverse also works.
 * **DOS 3.10 or newer** (MS-DOS, PC DOS, DR-DOS, FreeDOS, ...).
 * Written for **NASM** (free, open source). There are no other build
   dependencies.
-* About 19 KB resident. It can be loaded high with `LH`/`LOADHIGH`.
+* About 23 KB resident with the default settings (19 KB with `/T:0`).
+  It can be loaded high with `LH`/`LOADHIGH`.
+* Programs that only know the plain DOS functions keep long names intact
+  ("tunnelling", see below).
 
 ## Building
 
@@ -27,10 +30,13 @@ or simply `make`. `make check` runs the test suite (see below).
 ## Usage
 
 ```
-LFNTSR [/U] [/F] [/Q]
-  /U  uninstall
-  /F  install even if a long file name API is already present
-  /Q  quiet
+LFNTSR [/U] [/F] [/Q] [/H:n] [/T:n]
+  /U    uninstall
+  /F    install even if a long file name API is already present
+  /Q    quiet
+  /H:n  number of find handles, 1-64 (default 8, 274 bytes each)
+  /T:n  long names remembered for tunnelling, 0-32 (default 8,
+        278 bytes each; 0 turns tunnelling off)
 ```
 
 Put `LFNTSR` (or `LH LFNTSR /Q`) into `AUTOEXEC.BAT`. On startup it
@@ -51,7 +57,7 @@ already provides the API, unless you give `/F`.
 | 7147h  | get current directory (long form)           | |
 | 714Eh  | find first                                  | DOS or FILETIME time format |
 | 714Fh  | find next                                   | |
-| 71A1h  | find close                                  | 8 concurrent handles (LRU reuse) |
+| 71A1h  | find close                                  | 8 handles (`/H:n`), LRU reuse |
 | 7156h  | rename / move file                          | also changing only the letter case |
 | 7160h  | truename (CL=0 full, 1 short, 2 long path)  | CH bit 7 = don't expand SUBST |
 | 716Ch  | extended open/create                        | |
@@ -66,7 +72,8 @@ for functions it doesn't support.
 
 ## How it works
 
-LFNTSR hooks INT 21h and handles only AH=71h. Each call runs on a private
+LFNTSR hooks INT 21h. It handles AH=71h, and it also watches the plain DOS
+create, delete and rename functions (see *Tunnelling* below). Each call runs on a private
 stack. While a call is in progress it installs its own INT 24h handler
 (critical errors return "fail") and an INT 23h handler that ignores
 Ctrl-C, so DOS can't abort a program halfway through an update.
@@ -105,6 +112,51 @@ Ctrl-C, so DOS can't abort a program halfway through an update.
 * **Devices.** Names like `CON`, `NUL` or `LPT1.TXT` are recognized by
   walking the DOS device driver chain and are passed to DOS.
 
+* **Find handles.** When all handles are in use, find first takes over
+  the least recently used one. The handle number contains a generation
+  count, so the program that still holds the old handle gets error 6
+  (invalid handle) instead of the entries of another search. Programs
+  that keep many searches open (a recursive find that keeps one search per
+  directory level) need `/H:n`.
+* **Windows 3.x (386 enhanced mode).** All DOS boxes share the one
+  resident LFNTSR. While it works on a call it holds the Windows critical
+  section (INT 2Fh, AX=1681h/1682h), so no other virtual machine can run
+  LFNTSR code in between. A 71xxh call that arrives while another one is
+  still in progress (from an interrupt handler) fails with error 5
+  (access denied), not 7100h, so that the caller does not fall back to the
+  short name function and lose the long name.
+
+### Tunnelling and plain DOS calls
+
+Many DOS and Windows 3.x programs save a file by writing a temporary file
+and then deleting or renaming the old one, all with the plain DOS
+functions. Without help the long name is lost, and on MS-DOS the old long
+name entries stay behind as orphans (ScanDisk and `fsck` complain, and
+they use up directory slots). LFNTSR therefore also watches these DOS
+calls: create (3Ch, 5Bh, 6C00h), delete (41h, FCB 13h) and rename
+(56h, FCB 17h). Like Windows 95 it then
+
+* removes the long name entries of a file that DOS deleted or renamed.
+  After an FCB call with wildcards it removes all orphaned long name
+  entries of that directory;
+* remembers the long name and creation time of such a file for 15
+  seconds, keyed by drive, directory and short name;
+* gives that long name and creation time back to a file that is created
+  with the same short name in the same directory within these 15 seconds
+  (3Ch, 5Bh, 6C00h), or that a plain rename (56h) gives that short name.
+  This does not happen if the long name is in use again by then.
+
+Example: Write's "Save As" over `Save Demo Document.wri` deletes
+`SAVEDE~1.WRI` and creates it again. The new file is called
+`Save Demo Document.wri` again.
+
+For a create, LFNTSR writes the long name entries and an empty short entry
+before DOS runs, and DOS then opens the existing empty file (5Bh is sent
+to DOS as 3Ch, and a 6Ch "fail if it exists" as "open"). The caller gets
+the same results as for a new file. DOS itself runs on the caller's stack
+with the caller's INT 23h/24h handlers, as without LFNTSR. The 71xxh calls
+do not use the tunnel. Remembered names live only in memory.
+
 ### Drives that are not FAT12/FAT16
 
 Network drives, CD-ROMs (MSCDEX), FAT32 volumes and disks with sector
@@ -123,10 +175,26 @@ supported (BX=0).
 * 7142h (64-bit seek) and 71AAh (SUBST) are not implemented.
 * Moving a directory to another directory fails, because DOS can't do it.
 * LFNTSR is not reentrant: a 71xxh call made while another one is in
-  progress (e.g. from an interrupt handler) returns 7100h.
+  progress (from an interrupt handler) fails with error 5. Plain DOS calls
+  made at such a time go straight to DOS (no tunnelling).
+* Windows for Workgroups 3.11 with 32-bit file access is not supported.
+  With it, Windows' own file system handles the plain DOS calls of DOS
+  boxes and Windows programs and caches the disk, while LFNTSR reads and
+  writes directories directly with INT 25h/26h. Long names created this
+  way may be lost, and directories may be damaged. Turn 32-bit file
+  access off for drives you use with LFNTSR (32-bit *disk* access is
+  fine). LFNTSR does not yet detect this case (DOSLFN switches to short
+  names only there); this needs testing on WfW first.
+* Windows programs that call INT 21h/71xxh from protected mode do not get
+  long names: Windows 3.x does not translate their pointers for real mode
+  DOS. DOSLFN includes a Windows driver (`LFNXLAT.386`) that does; LFNTSR
+  does not.
+  Programs that call through DPMI in real mode (like NewShell16) work.
 * Tested under QEMU with FreeDOS (kernel 2040) and MS-DOS 6.20 (German),
   including SUBST drives, SHARE and RAMDRIVE. Not yet tested on real
-  hardware, on an actual 8088, or on DR-DOS / PC DOS.
+  hardware, on an actual 8088, or on DR-DOS / PC DOS. Tunnelling and the
+  plain DOS call handling (1.10) are so far tested on FreeDOS only, and
+  the Windows critical section has not been tested under Windows yet.
 
 ## Tests
 

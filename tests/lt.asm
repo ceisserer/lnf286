@@ -6,6 +6,11 @@
 ;   dir PATTERN | mk P TEXT | mknew P TEXT | cat P | full P | short P
 ;   long P | attr P | setattr P N | gen NAME | vol ROOT | time
 ;   touch P | finfo P | sub P (long name truename with SUBST flag)
+;   plain DOS calls (no 71xxh): sdel P (41h) | sren A B (56h)
+;   screat P (3Ch) | snew P (5Bh) | sopen P (6C00h, create only)
+;   fdel PATTERN (FCB 13h) | fren A B (FCB 17h)
+;   finds N PATTERN: N find-first calls, then find-next on the first handle
+;   wait N: wait N seconds
 ;
 ; Exit code 0 = ok, 1 = API error (printed as "ERR n"), 2 = usage
 ; ===========================================================================
@@ -84,6 +89,9 @@ cmds:   dw s_md,c_md, s_rd,c_rd, s_cd,c_cd, s_del,c_del, s_delw,c_delw
         dw s_cat,c_cat, s_full,c_full, s_short,c_short, s_long,c_long
         dw s_attr,c_attr, s_setattr,c_setattr, s_gen,c_gen, s_vol,c_vol
         dw s_time,c_time, s_touch,c_touch, s_finfo,c_finfo, s_sub,c_sub
+        dw s_sdel,c_sdel, s_sren,c_sren, s_screat,c_screat, s_snew,c_snew
+        dw s_sopen,c_sopen, s_fdel,c_fdel, s_fren,c_fren, s_finds,c_finds
+        dw s_wait,c_wait
         dw 0
 s_md    db 'md',0
 s_rd    db 'rd',0
@@ -107,6 +115,15 @@ s_time  db 'time',0
 s_touch db 'touch',0
 s_finfo db 'finfo',0
 s_sub   db 'sub',0
+s_sdel  db 'sdel',0
+s_sren  db 'sren',0
+s_screat db 'screat',0
+s_snew  db 'snew',0
+s_sopen db 'sopen',0
+s_fdel  db 'fdel',0
+s_fren  db 'fren',0
+s_finds db 'finds',0
+s_wait  db 'wait',0
 
 ; ---------------------------------------------------------------------------
 need1:  cmp word [argc],2
@@ -140,6 +157,140 @@ c_ren:  call need2
         mov di,[argv+4]
         mov ax,7156h
         jmp simple
+
+; ---- plain DOS functions
+c_sdel: call need1
+        mov ah,41h
+        jmp short dosc
+c_sren: call need2
+        push ds
+        pop es
+        mov di,[argv+4]
+        mov ah,56h
+dosc:   int 21h
+        jc err
+        jmp ok
+
+c_screat:
+        mov ah,3Ch
+        jmp short scr
+c_snew: mov ah,5Bh
+scr:    push ax
+        call need1
+        pop ax
+        xor cx,cx
+        int 21h
+        jc err
+sclose: mov bx,ax
+        mov ah,40h                      ; write something
+        mov dx,msg_plain
+        mov cx,5
+        int 21h
+        jc err
+        mov ah,3Eh
+        int 21h
+        jc err
+        jmp ok
+
+c_sopen:
+        call need1
+        mov si,dx
+        mov ax,6C00h
+        mov bx,2
+        xor cx,cx
+        mov dx,10h                      ; create, fail if it exists
+        int 21h
+        jc err
+        push ax
+        mov dx,msg_act
+        call puts
+        mov ax,cx
+        call putdec
+        call crlf
+        pop ax
+        jmp short sclose
+
+; FCB delete / rename: parse the name(s) with 29h
+c_fdel: call need1
+        mov si,dx
+        mov di,fcb
+        call fparse
+        mov ah,13h
+        jmp short fcall
+c_fren: call need2
+        mov si,dx
+        mov di,fcb
+        call fparse
+        mov si,[argv+4]
+        mov di,fcb+10h
+        call fparse
+        mov ah,17h
+fcall:  mov dx,fcb
+        int 21h
+        or al,al
+        jz ok
+        mov ax,0FFh
+        jmp err
+fparse: push ds
+        pop es
+        mov ax,2900h
+        int 21h
+        ret
+
+; finds N PATTERN
+c_finds:
+        call need2
+        mov si,dx
+        call atoi
+        mov [count],ax
+        xor bx,bx
+.l:     cmp bx,[count]
+        jae .next
+        push bx
+        mov ax,714Eh
+        mov cx,0016h
+        mov si,1
+        mov dx,[argv+4]
+        mov di,fd
+        stc
+        int 21h
+        pop bx
+        jc err
+        or bx,bx
+        jnz .n
+        mov [handle],ax
+.n:     inc bx
+        jmp short .l
+.next:  mov ax,714Fh
+        mov bx,[handle]
+        mov si,1
+        mov di,fd
+        stc
+        int 21h
+        jc err
+        mov dx,fd+2Ch
+        call putz
+        call crlf
+        jmp ok
+
+c_wait: call need1
+        mov si,dx
+        call atoi
+        mov dx,19                       ; ticks per second (rounded up)
+        mul dx
+        mov cx,ax
+        xor ax,ax
+        mov es,ax
+        mov bx,[es:046Ch]
+.w:     sti
+        hlt
+        mov ax,[es:046Ch]
+        sub ax,bx
+        cmp ax,cx
+        jb .w
+        push ds
+        pop es
+        jmp ok
 
 simple: stc
         int 21h
@@ -630,6 +781,9 @@ msg_ok    db 'OK',13,10,'$'
 msg_err   db 'ERR $'
 msg_bar   db ' | $'
 msg_act   db 'action $'
+msg_plain db 'plain'
+count   dw 0
+fcb     times 40 db 0
 
 argc    dw 0
 argv    times 8 dw 0

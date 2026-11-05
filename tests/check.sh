@@ -13,11 +13,15 @@ compare() {     # compare FILE EXPECTED
     if ! diff -u "$2" "$1"; then echo "FAIL: $1 differs from $2"; fail=1; fi
 }
 
-fsck_img() {    # fsck_img IMAGE OFFSET_SECTORS
+fsck_img() {    # fsck_img IMAGE OFFSET_SECTORS [nolfn]
     [ -f "$1" ] || return 0
     dd if="$1" of="$1.part" bs=512 skip=$2 2>/dev/null
     if ! fsck.fat -n "$1.part" >"$1.fsck" 2>&1; then
         echo "FAIL: fsck.fat on $1"; cat "$1.fsck"; fail=1
+    fi
+    # fsck.fat -n does not report orphaned long name entries
+    if [ "$3" != nolfn ] && ! python3 "$here/lfncheck.py" "$1.part"; then
+        echo "FAIL: orphaned long name entries on $1"; fail=1
     fi
     rm -f "$1.part"
 }
@@ -33,7 +37,7 @@ run() {
     compare "$work/$name/out.txt" "$here/$name.exp"
     fsck_img "$work/$name/hd.img" 63
     fsck_img "$work/$name/fd.img" 0
-    fsck_img "$work/$name/hd2.img" 63
+    fsck_img "$work/$name/hd2.img" 63 nolfn
     off=$(cat "$work/$name/hdoff")
     LC_ALL=C.UTF-8 mdir -/ -b -i "$work/$name/hd.img$off" :: | sort > "$work/$name/hd.files"
     compare "$work/$name/hd.files" "$here/$name.files"
@@ -41,6 +45,7 @@ run() {
 
 run basic basic "$here/fdboot.img" FAT32=1
 run pass pass "$here/fdboot.img" FAT32=1
+run tunnel tunnel "$here/fdboot.img" HDSETUP="$here/mkorphan.sh"
 if [ -n "$MSDOS_IMG" ]; then
     run msdos-basic basic "$MSDOS_IMG"
     run msdos msdos "$MSDOS_IMG" 'CONFIGEXTRA=DEVICE=A:\RAMDRIVE.SYS 256 512 64\r\n'
