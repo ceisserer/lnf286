@@ -24,10 +24,13 @@
         bits 16
         org 100h
 
-VERSION equ 0100h               ; 1.00
+VERSION equ 0110h               ; 1.10
 MAGIC   equ 4C46h               ; 'LF' install check signature
 MAXPATH equ 260
-NHANDLES equ 8                  ; concurrent find handles
+NHANDLES equ 8                  ; default number of find handles (/H:n)
+MAXHANDLES equ 64
+NTUNNELS equ 8                  ; default number of tunnel entries (/T:n)
+MAXTUNNELS equ 32
 HBASE   equ 1                   ; first find handle number
 STACKSZ equ 1536
 WPATHSZ equ 600
@@ -41,7 +44,8 @@ H_REQ   equ 4
 H_CLUS  equ 6
 H_IDX   equ 8
 H_LRU   equ 10
-H_PAT   equ 12                  ; pattern (FAT) or DTA (DOS)
+H_GEN   equ 12                  ; generation (high byte of the handle)
+H_PAT   equ 13                  ; pattern (FAT) or DTA (DOS)
 HSIZE   equ H_PAT + MAXPATH + 1
 
 ; DBG 'x' - with -DDEBUG write a character to the Bochs/QEMU debug port E9h
@@ -64,19 +68,89 @@ start:  jmp install
 old21     dd 0
 nuldev    dd 0                  ; NUL device header (List of Lists + 22h)
 dosmajor  db 0
+nhandles  dw NHANDLES           ; find handles (set by the installer)
+handles   dw 0                  ; -> handle table (after the stack)
+ntunnels  dw NTUNNELS           ; tunnel entries (0 = no tunnelling)
+tunnels   dw 0                  ; -> tunnel table (after the handles)
+dyn_end   dw 0                  ; end of the resident part
 uptab     times 128 db 0        ; upper case table for 80h..FFh
 cptab     times 128 dw 0        ; Unicode for OEM 80h..FFh
 
 ; ---------------------------------------------------------------------------
 ; INT 21h entry
+;   AH=71h               long file name API (dispatch)
+;   3Ch 5Bh 6Ch 41h 56h  plain DOS create / delete / rename and the FCB
+;   13h 17h              delete / rename: long name tunnelling and removal
+;                        of the long name entries (tunnel.inc)
+; Our own DOS calls arrive while [busy] is set and go straight to DOS.
 ; ---------------------------------------------------------------------------
 int21_handler:
         cmp ah,71h
         je .ours
+        cmp byte [cs:busy],0
+        jne .chain
+        cmp ah,41h
+        je .plain
+        cmp ah,56h
+        je .plain
+        cmp ah,3Ch
+        je .plain
+        cmp ah,5Bh
+        je .plain
+        cmp ah,13h
+        je .plain
+        cmp ah,17h
+        je .plain
+        cmp ax,6C00h
+        je .plain
 .chain: jmp far [cs:old21]
-.ours:  cmp byte [cs:busy],0
+.ours:  call sess_enter
+        jc .busy
+        call dispatch
+        jnc .ok
+        mov [u_ax],ax
+.ok:    call set_user_cf
+        call sess_leave
+        iret
+.busy:  ; re-entered (from an interrupt handler): a real error, not 7100h,
+        ; so that callers do not fall back to the short name functions
+        push bp
+        mov bp,sp
+        or word [bp+6],1
+        pop bp
+        mov ax,5
+        iret
+.plain: sti
+        sub sp,PS_N*2                   ; room for the pre -> post state
+        call plain_pre
+        sti
+        pushf
+        call far [cs:old21]
+        pushf                           ; DOS result flags
+        call plain_post
+        add sp,2+PS_N*2
+        iret
+
+; ---------------------------------------------------------------------------
+; sess_enter - (near call on the caller's stack) start working on a call:
+;   enter the Windows critical section (INT 2Fh/1681h, so that no other DOS
+;   box runs LFNTSR code meanwhile; harmless without Windows), claim [busy],
+;   save the registers in u_*, switch to our stack, DS = ES = CS, install
+;   our INT 23h/24h handlers.
+;   out: CF=1 busy (nothing changed, registers preserved)
+; sess_leave - the reverse; registers come from u_*.  Interrupts stay
+;   disabled on return (the caller's IRET restores them).
+; ---------------------------------------------------------------------------
+sess_enter:
+        push ax
+        mov ax,1681h
+        int 2Fh
+        pop ax
+        cli
+        cmp byte [cs:busy],0
         jne .busy
         mov byte [cs:busy],1
+        pop word [cs:sess_ret]
         mov [cs:u_ax],ax
         mov [cs:u_bx],bx
         mov [cs:u_cx],cx
@@ -89,7 +163,6 @@ int21_handler:
         mov [cs:u_ss],ss
         mov [cs:u_sp],sp
         mov ax,cs
-        cli
         mov ss,ax
         mov sp,stack_top
         sti
@@ -97,21 +170,24 @@ int21_handler:
         mov es,ax
         cld
         call int24_set
-        call dispatch
-        mov byte [res_cf],0
-        jnc .ok
-        mov [u_ax],ax
-        mov byte [res_cf],1
-.ok:    call int24_restore
+        clc
+        jmp [sess_ret]
+.busy:  sti
+        push ax
+        mov ax,1682h
+        int 2Fh
+        pop ax
+        stc
+        ret
+
+sess_leave:
+        pop word [sess_ret]
+        call int24_restore
         cli
         mov ss,[u_ss]
         mov sp,[u_sp]
-        mov bp,sp
-        and word [ss:bp+4],0FFFEh       ; caller's flags: CF
-        mov al,[res_cf]
-        xor ah,ah
-        or [ss:bp+4],ax
-        mov ax,[u_ax]
+        push word [sess_ret]
+        push word [u_ax]
         mov bx,[u_bx]
         mov cx,[u_cx]
         mov dx,[u_dx]
@@ -119,15 +195,30 @@ int21_handler:
         mov di,[u_di]
         mov bp,[u_bp]
         mov es,[u_es]
-        mov byte [busy],0
         mov ds,[u_ds]
-        iret
-.busy:  push bp                         ; re-entered: "not supported"
-        mov bp,sp
-        or word [bp+6],1
-        pop bp
-        mov ax,7100h
-        iret
+        mov byte [cs:busy],0
+        mov ax,1682h
+        int 2Fh
+        cli
+        pop ax
+        ret
+
+; set_user_cf - copy CF into the flags of the caller's INT 21h frame
+;   (71xxh calls: the frame is at [u_ss:u_sp])
+set_user_cf:
+        push ax
+        push bx
+        push es
+        mov al,0
+        adc al,0
+        mov es,[u_ss]
+        mov bx,[u_sp]
+        and byte [es:bx+4],0FEh
+        or [es:bx+4],al
+        pop es
+        pop bx
+        pop ax
+        ret
 
 ; While we work: critical errors always "fail", Ctrl-C/Break is ignored
 ; (DOS must not abort the program while we are in the middle of a call).
@@ -299,6 +390,7 @@ dispatch:
 %include "time.inc"
 %include "path.inc"
 %include "funcs.inc"
+%include "tunnel.inc"
 
 ; ---------------------------------------------------------------------------
 ; go_resident - last step of the installation (runs from resident code
@@ -308,7 +400,8 @@ dispatch:
 go_resident:
         mov bx,dx
         mov di,bss_start
-        mov cx,bss_end-bss_start
+        mov cx,[dyn_end]
+        sub cx,di
         xor al,al
         rep stosb
         mov word [c_dir+C_BUF],dirbuf
@@ -338,7 +431,8 @@ transient_end:
         alignb 2
 bss_start:
 busy      resb 1
-res_cf    resb 1
+          resb 1
+sess_ret  resw 1
 u_ax      resw 1
 u_bx      resw 1
 u_cx      resw 1
@@ -486,6 +580,29 @@ fi_size   resd 1
 lru_ctr   resw 1
 o_name11  resb 12
 tmpent    resb 32
+nf_attr   resb 1
+
+; plain DOS calls (tunnel.inc); ps_flags .. ps_cx is the state (PS_N words)
+pat_wild  resb 1
+sc_skip   resb 1
+tk_drive  resb 1
+sw_seq    resb 1
+sw_chk    resb 1
+          alignb 2
+ps_vars:
+ps_flags  resw 1
+ps_drive  resw 1
+ps_clus   resw 1
+ps_a      resw 1
+ps_b      resw 1
+ps_dx     resw 1
+ps_cx     resw 1
+ps_dosf   resw 1
+tk_clus   resw 1
+tk_name   resw 1
+t_hit     resw 1
+sw_start  resw 1
+pat11     resb 12
 
 inpath    resb MAXPATH+2
 inpath2   resb MAXPATH+2
@@ -500,8 +617,7 @@ mt_tmp    resb MAXPATH+2
           alignb 2
 dirbuf    resb 512
 fatbuf    resb 512
-handles   resb NHANDLES*HSIZE
           alignb 2
           resb STACKSZ
 stack_top:
-bss_end:
+bss_end:                        ; handle and tunnel tables follow

@@ -40,11 +40,25 @@ install:
         je .optf
         cmp al,'Q'
         je .optq
-        cmp al,'?'
-        je .usage
         cmp al,'H'
-        je .usage
+        je .opth
+        cmp al,'T'
+        je .optt
         jmp .usage
+.opth:  call get_num                    ; /H:n find handles 1..MAXHANDLES
+        jc .usage
+        or ax,ax
+        jz .usage
+        cmp ax,MAXHANDLES
+        ja .usage
+        mov [nhandles],ax
+        jmp short .arg
+.optt:  call get_num                    ; /T:n tunnel entries 0..MAXTUNNELS
+        jc .usage
+        cmp ax,MAXTUNNELS
+        ja .usage
+        mov [ntunnels],ax
+        jmp short .arg
 .optu:  mov byte [opt_u],1
         jmp short .arg
 .optf:  mov byte [opt_f],1
@@ -174,11 +188,34 @@ install:
         push cs
         pop es
         mov word [2Ch],0
-        mov dx,msg_inst
-        call print_q
-        mov ax,bss_end+15
+        ; tables after the stack: find handles, then the tunnel
+        mov ax,[nhandles]
+        mov dx,HSIZE
+        mul dx
+        add ax,bss_end
+        mov [tunnels],ax
+        mov bx,ax
+        mov ax,[ntunnels]
+        mov dx,TSIZE
+        mul dx
+        add ax,bx
+        mov [dyn_end],ax
+        mov word [handles],bss_end
+        add ax,15
         mov cl,4
         shr ax,cl
+        ; enough memory for that (plus our stack while installing)?
+        mov bx,[2]                      ; PSP: first segment after us
+        mov dx,cs
+        sub bx,dx
+        mov dx,ax
+        add dx,32
+        cmp bx,dx
+        jae .memok
+        mov dx,msg_nomem
+        jmp fatal
+.memok: mov dx,msg_inst
+        call print_q
         call print_kb_q
         mov dx,ax
         jmp go_resident
@@ -214,6 +251,36 @@ uninstall:
 .hooked:
         mov dx,msg_hooked
         jmp fatal
+
+; get_num - after an option letter: optional ':' or '=', then a decimal
+;   number at SI -> AX.  CF if there is no number (or it is > 999).
+get_num:
+        cmp byte [si],':'
+        je .sep
+        cmp byte [si],'='
+        jne .n
+.sep:   inc si
+.n:     xor ax,ax
+        xor cx,cx                       ; digits
+.l:     mov bl,[si]
+        sub bl,'0'
+        jb .e
+        cmp bl,9
+        ja .e
+        inc si
+        inc cx
+        cmp cx,3
+        ja .bad
+        mov dx,10
+        mul dx
+        xor bh,bh
+        add ax,bx
+        jmp short .l
+.e:     jcxz .bad
+        clc
+        ret
+.bad:   stc
+        ret
 
 ; ---------------------------------------------------------------------------
 fatal:  call print
@@ -270,12 +337,14 @@ print_kb_q:
         pop ax
         ret
 
-msg_banner  db 'LFNTSR 1.00 - long file name API for DOS (FAT12/FAT16)',13,10,'$'
+msg_banner  db 'LFNTSR 1.10 - long file name API for DOS (FAT12/FAT16)',13,10,'$'
 msg_dosver  db 'DOS 3.10 or newer required.',13,10,'$'
-msg_usage   db 'Usage: LFNTSR [/U] [/F] [/Q]',13,10
-            db '  /U  uninstall',13,10
-            db '  /F  install even if a long file name API is present',13,10
-            db '  /Q  quiet',13,10,'$'
+msg_usage   db 'Usage: LFNTSR [/U] [/F] [/Q] [/H:n] [/T:n]',13,10
+            db '  /U    uninstall',13,10
+            db '  /F    install even if a long file name API is present',13,10
+            db '  /Q    quiet',13,10
+            db '  /H:n  find handles (1-64, default 8)',13,10
+            db '  /T:n  long names remembered for tunnelling (0-32, default 8)',13,10,'$'
 msg_already db 'Already installed.',13,10,'$'
 msg_notinst db 'Not installed.',13,10,'$'
 msg_haveapi db 'A long file name API is already present (use /F to override).',13,10,'$'
@@ -286,6 +355,7 @@ msg_crlf    db 13,10,'$'
 msg_inst    db 'Installed, $'
 msg_bytes   db ' bytes resident.',13,10,'$'
 msg_removed db 'Removed from memory.',13,10,'$'
+msg_nomem   db 'Not enough memory.',13,10,'$'
 msg_hooked  db 'Cannot uninstall: INT 21h was hooked by a later program.',13,10,'$'
 
 opt_u     db 0
